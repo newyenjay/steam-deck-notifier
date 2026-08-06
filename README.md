@@ -5,20 +5,21 @@
 [![Forks](https://img.shields.io/github/forks/oblassgit/refurbished-steam-deck-notifier?style=social)](https://github.com/oblassgit/refurbished-steam-deck-notifier/network/members)
 [![Discord](https://img.shields.io/discord/1142517154370043974?label=Discord&logo=discord&style=flat)](https://discord.gg/5gpFTMkvJn)
 [![Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20coffee-Ko--fi-FF5E5B?logo=kofi&logoColor=white&style=flat)](https://ko-fi.com/looti)
+
 # Refurbished Steam Deck Notifier
 
 This script checks the availability of refurbished Steam Decks on Steam and sends notifications to a specified Discord webhook. It queries Steam's API and compares the current stock status with previously stored values.
 
 ## 🚀 Features
 
-* Checks the availability of refurbished Steam Decks for a configurable country
-* Sends notifications via a **Discord webhook** when stock availability changes
-* Supports different Steam Deck models (LCD & OLED versions)
-* Prevents duplicate notifications by storing the last known stock status
-* **Optional CSV logging** for availability statistics
-* **Configurable Discord role pings** via JSON file
-* **Command-line arguments** for easy configuration
-* **Prebuilt executables** for users who don’t want to install Python
+- Checks the availability of refurbished Steam Decks for a configurable country
+- Sends notifications via a **Discord webhook** when stock availability changes
+- Supports different Steam Deck models (LCD & OLED versions)
+- Prevents duplicate notifications by storing the last known stock status
+- **Optional CSV logging** for availability statistics
+- **Configurable Discord role pings** via JSON file
+- **Command-line arguments** for easy configuration
+- **Prebuilt executables** for users who don’t want to install Python
 
 ## 📋 Requirements (for Python script users)
 
@@ -59,11 +60,11 @@ python steam_deck_checker.py --webhook-url "https://discord.com/api/webhooks/YOU
 
 ### Command Line Arguments
 
-* `-h`: Provides list of possible Arguments
-* `--webhook-url`: Discord webhook URL for notifications (**required**)
-* `--country-code`: Country code for Steam API (default: `DE`, **important**)
-* `--role-mapping`: JSON file containing Discord role mappings (optional)
-* `--csv-dir`: Directory path for daily CSV log files (optional)
+- `-h`: Provides list of possible Arguments
+- `--webhook-url`: Discord webhook URL for notifications (**required**)
+- `--country-code`: Country code for Steam API (default: `DE`, **important**)
+- `--role-mapping`: JSON file containing Discord role mappings (optional)
+- `--csv-dir`: Directory path for daily CSV log files (optional)
 
 ### Full Example
 
@@ -99,11 +100,11 @@ Find valid country codes [here](https://github.com/RudeySH/SteamCountries/blob/m
 
 The script checks availability for these models:
 
-* **64GB LCD** (Package ID: 903905)
-* **256GB LCD** (Package ID: 903906)
-* **512GB LCD** (Package ID: 903907)
-* **512GB OLED** (Package ID: 1202542)
-* **1TB OLED** (Package ID: 1202547)
+- **64GB LCD** (Package ID: 903905)
+- **256GB LCD** (Package ID: 903906)
+- **512GB LCD** (Package ID: 903907)
+- **512GB OLED** (Package ID: 1202542)
+- **1TB OLED** (Package ID: 1202547)
 
 ## 🔧 How It Works
 
@@ -117,15 +118,21 @@ The script checks availability for these models:
 
 When using `--csv-dir`, the script writes one CSV file for each day to the specified directory, with these fields:
 
-* `unix_timestamp`: Time of check
-* `storage_gb`: 64, 256, 512, or 1024
-* `display_type`: LCD or OLED
-* `package_id`: Steam product identifier
-* `available`: `True` or `False`
+- `unix_timestamp`: Time of check
+- `storage_gb`: 64, 256, 512, or 1024
+- `display_type`: LCD or OLED
+- `package_id`: Steam product identifier
+- `available`: `True` or `False`
 
 ## ⏲️ Running Periodically
 
-This script/executable **does not run continuously**. Use cron (Linux/macOS) or Task Scheduler (Windows) to automate execution.
+The script now runs continuously by default and checks availability every 30 seconds. Use `--run-once` if you want a single check instead of looping, or change the interval with `--interval-seconds`.
+
+```bash
+python3 notifier.py --country-code CA --interval-seconds 30
+```
+
+If you prefer to run it on a schedule instead of keeping it open, you can still use cron (Linux/macOS) or Task Scheduler (Windows).
 
 ### Example (Linux/macOS)
 

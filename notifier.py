@@ -16,16 +16,17 @@
 
 from time import gmtime, strftime
 import requests
-from discord_webhook import DiscordWebhook
 import os
 import csv
 from datetime import datetime
 import argparse
 import json
+import smtplib
+from email.message import EmailMessage
 
 
 # Default values
-DEFAULT_COUNTRY_CODE = 'DE'
+DEFAULT_COUNTRY_CODE = 'CA'
 DEFAULT_WEBHOOK_URL = "https://discord.com/api/webhooks/some_webhook"
 
 class SteamDeckModel:
@@ -74,18 +75,34 @@ def log_availability_data(version, package_id, available, is_oled, csv_dir: str,
         writer = csv.writer(f)
         writer.writerow([unix_timestamp, version, display_type, package_id, available])
 
-def superduperscraper(model: SteamDeckModel, csv_dir: str, country_code: str, webhook_url: str, webhook_url_new: str, role_ids: dict):
+def send_email_notification(subject: str, body: str, smtp_host: str, smtp_port: int, smtp_user: str, smtp_password: str, smtp_from: str, smtp_to: str, smtp_use_tls: bool = True):
+    """Send a notification email using SMTP."""
+    if not smtp_host or not smtp_to:
+        print("Email notification skipped: SMTP host or recipient is not configured")
+        return
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = smtp_from or smtp_user or "steam-deck-notifier@localhost"
+    message["To"] = smtp_to
+    message.set_content(body)
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port or 587) as server:
+            if smtp_use_tls:
+                server.starttls()
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.send_message(message)
+        print(f"Email sent to {smtp_to}")
+    except Exception as e:
+        print(f"Failed to send email notification: {e}")
+
+
+def superduperscraper(model: SteamDeckModel, csv_dir: str, country_code: str, smtp_config: dict, role_ids: dict = None):
     # Build Steam API URL with country code
     url = f'https://api.steampowered.com/IPhysicalGoodsService/CheckInventoryAvailableByPackage/v1?origin=https:%2F%2Fstore.steampowered.com&country_code={country_code}&packageid='
-    
-    # Determine which webhook URL to use based on model type
-    active_webhook_url = webhook_url_new if (model.is_new and webhook_url_new) else webhook_url
-    
-    # Create Discord webhook
-    webhook = DiscordWebhook(url=active_webhook_url, content="error")
-    
-    roleIdWithCountry = role_ids.get(model.package_id, "") if role_ids else ""
-    
+
     oldvalue = ""
     # Get previous availability from file
     if os.path.isfile(f"{model.package_id}_{country_code}.txt"):
@@ -115,17 +132,24 @@ def superduperscraper(model: SteamDeckModel, csv_dir: str, country_code: str, we
         # Log data
         log_availability_data(model.version, model.package_id, availability == "True", model.is_oled, csv_dir, country_code)
         
-        # Send Discord notification only on status change
+        # Send email notification only on status change
         if status_changed:
             display_type = "OLED" if model.is_oled else "LCD"
             condition_type = "new" if model.is_new else "refurbished"
-            if availability == "True":
-                # Include role ping only if role ID exists
-                role_ping = f" <@&{roleIdWithCountry}>" if roleIdWithCountry else ""
-                webhook.content = f"{condition_type} {model.version}GB {display_type} steam deck available{role_ping}"
-            else:
-                webhook.content = f"{condition_type} {model.version}GB {display_type} steam deck not available"
-            webhook.execute()
+            availability_text = "available" if availability == "True" else "not available"
+            subject = f"{condition_type.title()} Steam Deck {model.version}GB {display_type} is {availability_text}"
+            body = f"{condition_type.title()} Steam Deck {model.version}GB {display_type} is now {availability_text}."
+            send_email_notification(
+                subject=subject,
+                body=body,
+                smtp_host=smtp_config.get("host", ""),
+                smtp_port=int(smtp_config.get("port", 587) or 587),
+                smtp_user=smtp_config.get("user", ""),
+                smtp_password=smtp_config.get("password", ""),
+                smtp_from=smtp_config.get("from", ""),
+                smtp_to=smtp_config.get("to", ""),
+                smtp_use_tls=bool(smtp_config.get("use_tls", True)),
+            )
             
     except requests.RequestException as e:
         print(f"Error fetching data for {model.version}GB: {e}")
@@ -145,20 +169,54 @@ def load_role_mapping(role_file: str) -> dict:
         print(f"Warning: Could not load role mapping from {role_file}: {e}")
         return {}
 
+
+def load_dotenv(dotenv_path: str = None) -> dict:
+    """Load environment variables from a .env file if it exists."""
+    if not dotenv_path:
+        dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+
+    if not os.path.exists(dotenv_path):
+        return {}
+
+    loaded_values = {}
+    with open(dotenv_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+                loaded_values[key] = value
+
+    return loaded_values
+
+
 def main():
     """Main function to check all Steam Deck models"""
+    load_dotenv()
+
     parser = argparse.ArgumentParser(description='Check Steam Deck availability and optionally log to CSV')
     parser.add_argument('--include-new-models', action='store_true', help='Include request for new steam decks (not just refurbs)')
     parser.add_argument('--csv-dir', help='Directory path for daily CSV log files')
     parser.add_argument('--country-code', default=DEFAULT_COUNTRY_CODE, 
                        help=f'Country code for Steam API (default: {DEFAULT_COUNTRY_CODE})')
-    parser.add_argument('--webhook-url', default=DEFAULT_WEBHOOK_URL,
-                       help='Discord webhook URL for notifications')
-    parser.add_argument('--webhook-url-new', help='Discord webhook URL for seperate new model notifications (optional, defaults to --webhook-url)')
+    parser.add_argument('--smtp-host', help='SMTP server host for email notifications')
+    parser.add_argument('--smtp-port', type=int, default=None, help='SMTP server port (default: 587)')
+    parser.add_argument('--smtp-user', help='SMTP username')
+    parser.add_argument('--smtp-password', help='SMTP password')
+    parser.add_argument('--smtp-from', help='Sender email address')
+    parser.add_argument('--smtp-to', help='Recipient email address')
+    parser.add_argument('--smtp-use-tls', action='store_true', help='Enable TLS for SMTP connections')
     parser.add_argument('--role-mapping', help='JSON file containing package_id to role_id mapping')
     parser.add_argument('--csv-log', help='Deprecated: This option is no longer supported (last supported version v2.0.0).')
     
     args = parser.parse_args()
+
+    if args.interval_seconds < 1:
+        parser.error('--interval-seconds must be at least 1')
 
     if args.csv_log:
         print("w: Deprecated: This option is no longer supported (last supported version v2.0.0).")
@@ -176,7 +234,19 @@ def main():
         print("Logging disabled")
     
     print(f"Country code: {args.country_code}")
-    print(f"Webhook URL: {args.webhook_url}")
+    smtp_config = {
+        "host": args.smtp_host or os.getenv("SMTP_HOST", ""),
+        "port": args.smtp_port if args.smtp_port is not None else int(os.getenv("SMTP_PORT", "587")),
+        "user": args.smtp_user or os.getenv("SMTP_USER") or os.getenv("EMAIL_ADDRESS", ""),
+        "password": args.smtp_password or os.getenv("SMTP_PASSWORD") or os.getenv("EMAIL_PASSWORD", ""),
+        "from": args.smtp_from or os.getenv("SMTP_FROM") or os.getenv("EMAIL_FROM", ""),
+        "to": args.smtp_to or os.getenv("SMTP_TO") or os.getenv("EMAIL_TO", ""),
+        "use_tls": args.smtp_use_tls or os.getenv("SMTP_USE_TLS", "true").lower() == "true",
+    }
+    if smtp_config["to"]:
+        print(f"Email notifications enabled for: {smtp_config['to']}")
+    else:
+        print("Email notifications disabled")
     
     # Steam Deck models
     refurbModels = [
@@ -213,8 +283,7 @@ def main():
         print("No role mapping - notifications will not ping roles")
     
     for model in models:
-        superduperscraper(model, csv_dir, 
-                         args.country_code, args.webhook_url, args.webhook_url_new, role_ids)
+        superduperscraper(model, csv_dir, args.country_code, smtp_config, role_ids)
 
 if __name__ == "__main__":
     main()
