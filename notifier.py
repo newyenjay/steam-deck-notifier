@@ -215,9 +215,6 @@ def main():
     
     args = parser.parse_args()
 
-    if args.interval_seconds < 1:
-        parser.error('--interval-seconds must be at least 1')
-
     if args.csv_log:
         print("w: Deprecated: This option is no longer supported (last supported version v2.0.0).")
     
