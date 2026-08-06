@@ -3,7 +3,7 @@ name: Steam Deck Notifier
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: "*/5 * * * *"
 
 jobs:
   run-notifier:
@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -32,4 +32,4 @@ jobs:
           SMTP_FROM: ${{ secrets.EMAIL_FROM }}
           SMTP_TO: ${{ secrets.EMAIL_TO }}
         run: |
-          python notifier.py --run-once --country-code CA
+          python notifier.py --country-code CA
