@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steam Deck Notifier Status</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 2rem;
+        background: #111827;
+        color: #f9fafb;
+      }
+      h1 {
+        margin-bottom: 0.25rem;
+      }
+      .card {
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      .status-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .pill {
+        display: inline-block;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: bold;
+      }
+      .pill.true {
+        background: #14532d;
+        color: #dcfce7;
+      }
+      .pill.false {
+        background: #7f1d1d;
+        color: #fee2e2;
+      }
+      .pill.unknown {
+        background: #44403c;
+        color: #f5f5f4;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.8rem;
+        border-radius: 999px;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+      }
+      .status-badge.ok {
+        background: #14532d;
+        color: #dcfce7;
+      }
+      .status-badge.warn {
+        background: #92400e;
+        color: #fef3c7;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #374151;
+        padding: 0.7rem;
+        text-align: left;
+      }
+      button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 0.6rem 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Steam Deck Notifier</h1>
+    <p>Live status from the latest API checks.</p>
+    <button id="refreshBtn">Refresh now</button>
+    <div id="summary" class="card"></div>
+    <div id="results" class="status-grid"></div>
+    <div class="card">
+      <h2>Check history</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Model</th>
+            <th>Package ID</th>
+            <th>Display</th>
+            <th>Available</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <script>
+      let autoRefreshTimer = null;
+
+      function renderStatusBadge(summaryData, lastSuccessfulCheck) {
+        const summary = document.getElementById("summary");
+        const badgeClass = lastSuccessfulCheck ? "ok" : "warn";
+        const badgeText = lastSuccessfulCheck
+          ? `Last successful check: ${lastSuccessfulCheck}`
+          : "No successful check yet";
+        summary.innerHTML = `
+          <div class="status-badge ${badgeClass}">● ${badgeText}</div>
+          <div><strong>Country:</strong> ${summaryData.country_code}</div>
+          <div><strong>Last checked:</strong> ${summaryData.checked_at}</div>
+        `;
+      }
+
+      async function loadData() {
+        const results = document.getElementById("results");
+        const historyBody = document.getElementById("historyBody");
+
+        const refreshRes = await fetch("/api/refresh");
+        const refreshData = await refreshRes.json();
+
+        const historyRes = await fetch("/api/history");
+        const historyData = await historyRes.json();
+
+        const successfulChecks = historyData.filter(
+          (item) =>
+            item.available &&
+            String(item.available).toLowerCase() !== "unknown",
+        );
+        const lastSuccessfulCheck = successfulChecks.length
+          ? successfulChecks[successfulChecks.length - 1].timestamp
+          : null;
+
+        renderStatusBadge(refreshData, lastSuccessfulCheck);
+
+        results.innerHTML = refreshData.results
+          .map(
+            (item) => `
+          <div class="card">
+            <h3>${item.version}GB ${item.display_type}</h3>
+            <p>Package ID: ${item.package_id}</p>
+            <span class="pill ${String(item.available).toLowerCase()}">${item.available}</span>
+            <p>${item.checked_at}</p>
+          </div>
+        `,
+          )
+          .join("");
+
+        historyBody.innerHTML = historyData
+          .map(
+            (item) => `
+          <tr>
+            <td>${item.timestamp}</td>
+            <td>${item.version}GB</td>
+            <td>${item.package_id}</td>
+            <td>${item.display_type}</td>
+            <td><span class="pill ${String(item.available).toLowerCase()}">${item.available}</span></td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function startAutoRefresh() {
+        if (autoRefreshTimer) {
+          clearInterval(autoRefreshTimer);
+        }
+        autoRefreshTimer = setInterval(loadData, 30000);
+      }
+
+      document.getElementById("refreshBtn").addEventListener("click", loadData);
+      loadData();
+      startAutoRefresh();
+    </script>
+  </body>
+</html>

@@ -1,16 +1,29 @@
+<<<<<<< HEAD
 # fly.toml app configuration file generated for steam-deck-notifier on 2026-08-07T18:09:47Z
+=======
+# fly.toml app configuration file generated for refurbished-steam-deck-notifier on 2026-08-07T13:43:49-06:00
+>>>>>>> 8f78ce0 (Adding UI interface)
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
+<<<<<<< HEAD
 app = 'steam-deck-notifier'
 primary_region = 'iad'
+=======
+app = 'refurbished-steam-deck-notifier'
+primary_region = 'ord'
+>>>>>>> 8f78ce0 (Adding UI interface)
 
 [build]
   builder = 'paketobuildpacks/builder:base'
 
 [env]
   PORT = '8080'
+<<<<<<< HEAD
+=======
+  FLASK_APP = 'app.py'
+>>>>>>> 8f78ce0 (Adding UI interface)
 
 [http_service]
   internal_port = 8080
@@ -22,6 +35,9 @@ primary_region = 'iad'
 
 [[vm]]
   memory = '1gb'
+<<<<<<< HEAD
   cpu_kind = 'shared'
+=======
+>>>>>>> 8f78ce0 (Adding UI interface)
   cpus = 1
   memory_mb = 1024
