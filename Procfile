@@ -1,5 +1,1 @@
-<<<<<<< Updated upstream
-# TODO: Modify this Procfile to fit your needs
-=======
->>>>>>> Stashed changes
-web: gunicorn app:app
+app: gunicorn app:app --bind 0.0.0.0:$PORT
