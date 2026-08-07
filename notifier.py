@@ -81,10 +81,15 @@ def send_email_notification(subject: str, body: str, smtp_host: str, smtp_port: 
         print("Email notification skipped: SMTP host or recipient is not configured")
         return
 
+    recipients = [address.strip() for address in smtp_to.split(',') if address.strip()]
+    if not recipients:
+        print("Email notification skipped: no valid recipients configured")
+        return
+
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = smtp_from or smtp_user or "steam-deck-notifier@localhost"
-    message["To"] = smtp_to
+    message["To"] = ", ".join(recipients)
     message.set_content(body)
 
     try:
@@ -93,8 +98,8 @@ def send_email_notification(subject: str, body: str, smtp_host: str, smtp_port: 
                 server.starttls()
             if smtp_user and smtp_password:
                 server.login(smtp_user, smtp_password)
-            server.send_message(message)
-        print(f"Email sent to {smtp_to}")
+            server.send_message(message, to_addrs=recipients)
+        print(f"Email sent to {', '.join(recipients)}")
     except Exception as e:
         print(f"Failed to send email notification: {e}")
 
