@@ -90,11 +90,33 @@
   <body>
     <h1>Steam Deck Notifier</h1>
     <p>Live status from the latest API checks.</p>
-    <button id="refreshBtn">Refresh now</button>
+    <div id="lastUpdated" style="color:#cbd5e1;margin-top:0.25rem;margin-bottom:0.5rem;">Last updated: —</div>
     <div id="summary" class="card"></div>
     <div id="results" class="status-grid"></div>
     <div class="card">
       <h2>Check history</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+        <label style="color:#cbd5e1;">Filter:</label>
+        <select id="filterSelect">
+          <option value="all">All</option>
+          <option value="available">Available</option>
+          <option value="unavailable">Unavailable</option>
+          <option value="unknown">Unknown</option>
+        </select>
+
+        <label style="color:#cbd5e1;margin-left:0.75rem;">Sort by:</label>
+        <select id="sortSelect">
+          <option value="timestamp">Timestamp</option>
+          <option value="version">Model</option>
+          <option value="package_id">Package ID</option>
+          <option value="display_type">Display</option>
+          <option value="available">Available</option>
+        </select>
+        <select id="sortDirSelect">
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
+      </div>
       <table>
         <thead>
           <tr>
@@ -107,9 +129,20 @@
         </thead>
         <tbody id="historyBody"></tbody>
       </table>
+      <div id="pagination" style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
+        <button id="prevBtn">Prev</button>
+        <span id="pageInfo" style="min-width:140px;display:inline-block;text-align:center;color:#cbd5e1;"></span>
+        <button id="nextBtn">Next</button>
+      </div>
     </div>
     <script>
       let autoRefreshTimer = null;
+      let historyItems = [];
+      let currentPage = 1;
+      const pageSize = 5;
+      let sortBy = 'timestamp';
+      let sortDir = 'desc';
+      let filterBy = 'all';
 
       function formatTimestamp(ts) {
         if (!ts) return "n/a";
@@ -179,7 +212,72 @@
           )
           .join("");
 
-        historyBody.innerHTML = historyData
+        // Store history items and render the first page (most recent first)
+        historyItems = historyData.slice().reverse();
+        currentPage = 1;
+        // apply current controls
+        applyControlsFromUI();
+        renderHistoryPage();
+
+        // update last-updated timestamp to now (client time) in Calgary timezone
+        try {
+          const nowIso = new Date().toISOString();
+          const lastEl = document.getElementById('lastUpdated');
+          if (lastEl) lastEl.textContent = `Last updated: ${formatTimestamp(nowIso)}`;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      function renderHistoryPage() {
+        const historyBody = document.getElementById("historyBody");
+        const pageInfo = document.getElementById("pageInfo");
+        const prevBtn = document.getElementById("prevBtn");
+        const nextBtn = document.getElementById("nextBtn");
+
+        // Filter
+        let filtered = historyItems.filter((item) => {
+          if (filterBy === 'all') return true;
+          const av = String(item.available).toLowerCase();
+          if (filterBy === 'available') return av === 'true' || av === 'available' || av === 'yes';
+          if (filterBy === 'unavailable') return av === 'false' || av === 'unavailable' || av === 'no';
+          if (filterBy === 'unknown') return av === 'unknown' || av === '' || av === 'null' || av === 'none';
+          return true;
+        });
+
+        // Sort
+        const compare = (a, b) => {
+          const getVal = (item) => {
+            if (sortBy === 'timestamp') return Date.parse(item.timestamp) || 0;
+            if (sortBy === 'version') return parseFloat(item.version) || 0;
+            if (sortBy === 'package_id') return String(item.package_id || '').toLowerCase();
+            if (sortBy === 'display_type') return String(item.display_type || '').toLowerCase();
+            if (sortBy === 'available') return String(item.available || '').toLowerCase();
+            return String(item[sortBy] || '').toLowerCase();
+          };
+
+          const va = getVal(a);
+          const vb = getVal(b);
+          if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+          if (va < vb) return -1;
+          if (va > vb) return 1;
+          return 0;
+        };
+
+        filtered.sort((a, b) => {
+          const res = compare(a, b);
+          return sortDir === 'asc' ? res : -res;
+        });
+
+        const total = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const start = (currentPage - 1) * pageSize;
+        const pageItems = filtered.slice(start, start + pageSize);
+
+        historyBody.innerHTML = pageItems
           .map(
             (item) => `
           <tr>
@@ -192,7 +290,50 @@
         `,
           )
           .join("");
+
+        const showingFrom = total === 0 ? 0 : start + 1;
+        const showingTo = start + pageItems.length;
+        pageInfo.textContent = `Showing ${showingFrom}-${showingTo} of ${total} (${currentPage}/${totalPages})`;
+
+        prevBtn.disabled = currentPage <= 1;
+        nextBtn.disabled = currentPage >= totalPages;
       }
+
+      document.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.id === "prevBtn") {
+          currentPage -= 1;
+          renderHistoryPage();
+        } else if (ev.target && ev.target.id === "nextBtn") {
+          currentPage += 1;
+          renderHistoryPage();
+        }
+      });
+
+      // Wire up filter/sort controls
+      function applyControlsFromUI() {
+        const f = document.getElementById('filterSelect');
+        const s = document.getElementById('sortSelect');
+        const d = document.getElementById('sortDirSelect');
+        if (f) filterBy = f.value;
+        if (s) sortBy = s.value;
+        if (d) sortDir = d.value;
+      }
+
+      document.getElementById('filterSelect').addEventListener('change', () => {
+        applyControlsFromUI();
+        currentPage = 1;
+        renderHistoryPage();
+      });
+      document.getElementById('sortSelect').addEventListener('change', () => {
+        applyControlsFromUI();
+        currentPage = 1;
+        renderHistoryPage();
+      });
+      document.getElementById('sortDirSelect').addEventListener('change', () => {
+        applyControlsFromUI();
+        currentPage = 1;
+        renderHistoryPage();
+      });
 
       function startAutoRefresh() {
         if (autoRefreshTimer) {
@@ -201,7 +342,7 @@
         autoRefreshTimer = setInterval(loadData, 30000);
       }
 
-      document.getElementById("refreshBtn").addEventListener("click", loadData);
+      // Refresh button removed; page auto-refreshes every 30s.
       loadData();
       startAutoRefresh();
     </script>
