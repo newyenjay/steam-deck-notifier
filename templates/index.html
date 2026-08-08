@@ -111,16 +111,37 @@
     <script>
       let autoRefreshTimer = null;
 
+      function formatTimestamp(ts) {
+        if (!ts) return "n/a";
+        try {
+          // Ensure the string is parsed as UTC when needed
+          const parseable = String(ts).includes("UTC") ? String(ts) : `${ts} UTC`;
+          const d = new Date(parseable);
+          const opts = {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            timeZoneName: "short",
+          };
+          return new Intl.DateTimeFormat("en-CA", Object.assign({ timeZone: "America/Edmonton" }, opts)).format(d);
+        } catch (e) {
+          return ts;
+        }
+      }
+
       function renderStatusBadge(summaryData, lastSuccessfulCheck) {
         const summary = document.getElementById("summary");
         const badgeClass = lastSuccessfulCheck ? "ok" : "warn";
         const badgeText = lastSuccessfulCheck
-          ? `Last successful check: ${lastSuccessfulCheck}`
+          ? `Last successful check: ${formatTimestamp(lastSuccessfulCheck)}`
           : "No successful check yet";
         summary.innerHTML = `
           <div class="status-badge ${badgeClass}">● ${badgeText}</div>
           <div><strong>Country:</strong> ${summaryData.country_code}</div>
-          <div><strong>Last checked:</strong> ${summaryData.checked_at}</div>
+          <div><strong>Last checked:</strong> ${formatTimestamp(summaryData.checked_at)}</div>
         `;
       }
 
@@ -152,7 +173,7 @@
             <h3>${item.version}GB ${item.display_type}</h3>
             <p>Package ID: ${item.package_id}</p>
             <span class="pill ${String(item.available).toLowerCase()}">${item.available}</span>
-            <p>${item.checked_at}</p>
+            <p>${formatTimestamp(item.checked_at)}</p>
           </div>
         `,
           )
@@ -162,7 +183,7 @@
           .map(
             (item) => `
           <tr>
-            <td>${item.timestamp}</td>
+            <td>${formatTimestamp(item.timestamp)}</td>
             <td>${item.version}GB</td>
             <td>${item.package_id}</td>
             <td>${item.display_type}</td>
